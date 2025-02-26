@@ -32,35 +32,47 @@ PID::PID(double* Input, double* Output, double* Setpoint,
         if (timeChange >= SampleTime) {
             double input = *myInput;
             double error = *mySetpoint - input;
-            double dInput = input - lastInput;
-    
-            // Розрахунок пропорційної складової (Kp має найвищий пріоритет)
-            P_term = kp * error;
-    
-            // Обчислюємо допустимі межі для інтегральної складової (Ki)
-            // Вона не може перевищити вихід, тому її ліміти – це залишок після врахування P_term
+            
+            // Обчислення історичних приростів помилки:
+            // dError = E(n) - E(n-1)
+            // ddError = E(n) - 2*E(n-1) + E(n-2)
+            double dError = error - lastError;
+            double ddError = error - 2.0 * lastError + prevError;
+            
+            // Рекурсивна формула PID (різницевий варіант):
+            // ΔU = ki*E(n) + kp*(E(n) - E(n-1)) + kd*(E(n) - 2E(n-1) + E(n-2))
+            double deltaOutput = ki * error + kp * dError + kd * ddError;
+            double output = lastOutput + deltaOutput;
+            
+            // Розрахунок пропорційної складової (P має найвищий пріоритет)
+            double P_term = kp * error;
+            
+            // Обчислення допустимих меж для інтегральної складової:
+            // залишок після врахування P_term
             double allowedIMax = outMax - P_term;
             double allowedIMin = outMin - P_term;
-    
-            // Оновлюємо інтегральну складову і обмежуємо її згідно з допустимими значеннями
+            
+            // Рекурсивне накопичення інтегральної складової
             I_term += ki * error;
             I_term = constrain(I_term, allowedIMin, allowedIMax);
-    
-            // Розрахунок допустимих меж для диференціальної складової (Kd)
-            // Вона повинна враховувати суму P_term та I_term
+            
+            // Реконструкція диференціальної складової:
+            // Вона визначається як різниця між сумою (рекурсивно обчисленим output)
+            // та вже визначеними P та I складовими
+            double D_term = output - (P_term + I_term);
             double allowedDMax = outMax - (P_term + I_term);
             double allowedDMin = outMin - (P_term + I_term);
-    
-            // Обчислення диференціальної складової та її обмеження
-            D_term = -kd * dInput;
             D_term = constrain(D_term, allowedDMin, allowedDMax);
-    
-            // Остаточний вихід – сума всіх складових
-            double output = P_term + I_term + D_term;
-            // Фінальне обмеження на випадок непередбачених ситуацій
+            
+            // Остаточний вихід – сума всіх складових із фінальним обмеженням
+            output = P_term + I_term + D_term;
             output = constrain(output, outMin, outMax);
             *myOutput = output;
-    
+            
+            // Оновлення історії для рекурсивного обчислення
+            prevError = lastError;
+            lastError = error;
+            lastOutput = output;
             lastInput = input;
             lastTime = now;
             return true;
