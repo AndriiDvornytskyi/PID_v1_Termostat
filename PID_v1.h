@@ -28,7 +28,7 @@ public:
     int GetMode();
     int GetDirection();
 
-    // Додані методи для отримання окремих складових PID
+    // Методи для отримання окремих складових PID
     double GetPterm();
     double GetIterm();
     double GetDterm();
@@ -48,8 +48,13 @@ private:
     double outMin, outMax;
     bool inAuto, pOnE;
 
-    // Додані змінні для збереження P, I, D складових
+    // Змінні для збереження складових PID
     double P_term, I_term, D_term;
+    
+    // Нові змінні для рекурсивної (різницевої) форми
+    double lastError;   // E(n-1)
+    double prevError;   // E(n-2)
+    double lastOutput;  // U(n-1)
 };
 
 #endif
