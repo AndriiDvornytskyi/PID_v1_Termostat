@@ -25,34 +25,48 @@ PID::PID(double* Input, double* Output, double* Setpoint,
          double Kp, double Ki, double Kd, int ControllerDirection)
     : PID(Input, Output, Setpoint, Kp, Ki, Kd, P_ON_E, ControllerDirection) {}
 
-bool PID::Compute() {
-    if (!inAuto) return false;
-    unsigned long now = millis();
-    unsigned long timeChange = now - lastTime;
-    if (timeChange >= SampleTime) {
-        double input = *myInput;
-        double error = *mySetpoint - input;
-        double dInput = input - lastInput;
-
-        // Обчислення P, I, D складових
-        P_term = kp * error;
-        I_term += ki * error;
-        D_term = -kd * dInput;
-
-        if (I_term > outMax) I_term = outMax;
-        else if (I_term < outMin) I_term = outMin;
-
-        double output = P_term + I_term + D_term;
-        if (output > outMax) output = outMax;
-        else if (output < outMin) output = outMin;
-        *myOutput = output;
-
-        lastInput = input;
-        lastTime = now;
-        return true;
+    bool PID::Compute() {
+        if (!inAuto) return false;
+        unsigned long now = millis();
+        unsigned long timeChange = now - lastTime;
+        if (timeChange >= SampleTime) {
+            double input = *myInput;
+            double error = *mySetpoint - input;
+            double dInput = input - lastInput;
+    
+            // Розрахунок пропорційної складової (Kp має найвищий пріоритет)
+            P_term = kp * error;
+    
+            // Обчислюємо допустимі межі для інтегральної складової (Ki)
+            // Вона не може перевищити вихід, тому її ліміти – це залишок після врахування P_term
+            double allowedIMax = outMax - P_term;
+            double allowedIMin = outMin - P_term;
+    
+            // Оновлюємо інтегральну складову і обмежуємо її згідно з допустимими значеннями
+            I_term += ki * error;
+            I_term = constrain(I_term, allowedIMin, allowedIMax);
+    
+            // Розрахунок допустимих меж для диференціальної складової (Kd)
+            // Вона повинна враховувати суму P_term та I_term
+            double allowedDMax = outMax - (P_term + I_term);
+            double allowedDMin = outMin - (P_term + I_term);
+    
+            // Обчислення диференціальної складової та її обмеження
+            D_term = -kd * dInput;
+            D_term = constrain(D_term, allowedDMin, allowedDMax);
+    
+            // Остаточний вихід – сума всіх складових
+            double output = P_term + I_term + D_term;
+            // Фінальне обмеження на випадок непередбачених ситуацій
+            output = constrain(output, outMin, outMax);
+            *myOutput = output;
+    
+            lastInput = input;
+            lastTime = now;
+            return true;
+        }
+        return false;
     }
-    return false;
-}
 
 void PID::SetTunings(double Kp, double Ki, double Kd, int POn) {
     if (Kp < 0 || Ki < 0 || Kd < 0) return;
