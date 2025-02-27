@@ -13,6 +13,8 @@ public:
 
     PID(double*, double*, double*, double, double, double, int, int);
     PID(double*, double*, double*, double, double, double, int);
+    PID(double*, double*, double*, double, double, double, int, int, int, int);
+    PID(double*, double*, double*, double, double, double, int, int, int);
     
     void SetMode(int Mode);
     bool Compute();
