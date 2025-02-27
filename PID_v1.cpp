@@ -9,6 +9,7 @@ PID::PID(double *Input, double *Output, double *Setpoint,
     mySetpoint = Setpoint;
     inAuto = false;
 
+    // За замовчуванням встановлюємо діапазон 0–255
     SetOutputLimits(0, 255);
     SampleTime = 100;
     SetControllerDirection(ControllerDirection);
@@ -30,27 +31,27 @@ PID::PID(double *Input, double *Output, double *Setpoint,
 PID::PID(double *Input, double *Output, double *Setpoint,
     double Kp, double Ki, double Kd, int POn, int ControllerDirection, int outMin, int outMax)
 {
-myOutput = Output;
-myInput = Input;
-mySetpoint = Setpoint;
-inAuto = false;
+    myOutput = Output;
+    myInput = Input;
+    mySetpoint = Setpoint;
+    inAuto = false;
 
-SetOutputLimits(outMin, outMax);
-SampleTime = 100;
-SetControllerDirection(ControllerDirection);
-SetTunings(Kp, Ki, Kd, POn);
+    SetOutputLimits(outMin, outMax);
+    SampleTime = 100;
+    SetControllerDirection(ControllerDirection);
+    SetTunings(Kp, Ki, Kd, POn);
 
-lastTime = millis() - SampleTime;
+    lastTime = millis() - SampleTime;
 
-// Ініціалізація складових PID
-P_term = 0;
-I_term = 0;
-D_term = 0;
+    // Ініціалізація складових PID
+    P_term = 0;
+    I_term = 0;
+    D_term = 0;
 
-// Ініціалізація змінних для рекурсивного обчислення
-lastError = 0;
-prevError = 0;
-lastOutput = 0;
+    // Ініціалізація змінних для рекурсивного обчислення
+    lastError = 0;
+    prevError = 0;
+    lastOutput = 0;
 }
 
 PID::PID(double *Input, double *Output, double *Setpoint,
@@ -72,40 +73,32 @@ bool PID::Compute()
         double input = *myInput;
         double error = *mySetpoint - input;
 
-        // Обчислення різницевих приростів помилки:
-        // dError = E(n) - E(n-1)
-        // ddError = E(n) - 2E(n-1) + E(n-2)
+        // Обчислення приростів помилки
         double dError = error - lastError;
         double ddError = error - 2.0 * lastError + prevError;
 
-        // Рекурсивна формула PID:
-        // ΔU = ki * E(n) + kp * (E(n) - E(n-1)) + kd * (E(n) - 2E(n-1) + E(n-2))
+        // Рекурсивна формула PID
         double deltaOutput = ki * error + kp * dError + kd * ddError;
         double output = lastOutput + deltaOutput;
 
-        // Обчислення пропорційної складової (найвищий пріоритет)
+        // Обчислення пропорційної складової
         P_term = kp * error;
 
-        // Обчислення допустимих меж для інтегральної складової
         double allowedIMax = outMax - P_term;
         double allowedIMin = outMin - P_term;
 
-        // Рекурсивне накопичення інтегральної складової з обмеженням
         I_term += ki * error;
         I_term = constrain(I_term, allowedIMin, allowedIMax);
 
-        // Обчислення диференціальної складової як залишок від рекурсивного виходу
         D_term = output - (P_term + I_term);
         double allowedDMax = outMax - (P_term + I_term);
         double allowedDMin = outMin - (P_term + I_term);
         D_term = constrain(D_term, allowedDMin, allowedDMax);
 
-        // Остаточний вихід – сума всіх складових із фінальним обмеженням
         output = P_term + I_term + D_term;
         output = constrain(output, outMin, outMax);
         *myOutput = output;
 
-        // Оновлення історичних змінних для рекурсивного обчислення
         prevError = lastError;
         lastError = error;
         lastOutput = output;
@@ -128,9 +121,10 @@ void PID::SetTunings(double Kp, double Ki, double Kd, int POn)
     dispKd = Kd;
 
     double SampleTimeInSec = ((double)SampleTime) / 1000;
-    kp = Kp;
-    ki = Ki * SampleTimeInSec;
-    kd = Kd / SampleTimeInSec;
+    // Використовуємо scalingFactor для масштабування коефіцієнтів, виходячи з діапазону, заданого SetOutputLimits()
+    kp = dispKp * scalingFactor;
+    ki = dispKi * scalingFactor * SampleTimeInSec;
+    kd = dispKd * scalingFactor / SampleTimeInSec;
 
     if (controllerDirection == REVERSE)
     {
@@ -162,6 +156,9 @@ void PID::SetOutputLimits(double Min, double Max)
         return;
     outMin = Min;
     outMax = Max;
+    
+    // Розрахунок коефіцієнта масштабування: новий діапазон/256 (за замовчуванням 0–255)
+    scalingFactor = (outMax - outMin) / 255.0;
 
     if (inAuto)
     {
@@ -174,6 +171,9 @@ void PID::SetOutputLimits(double Min, double Max)
             I_term = outMax;
         else if (I_term < outMin)
             I_term = outMin;
+            
+        // Перерахунок внутрішніх коефіцієнтів PID із застосуванням нового коефіцієнта масштабування
+        SetTunings(dispKp, dispKi, dispKd, pOn);
     }
 }
 

@@ -49,11 +49,14 @@ private:
     unsigned long SampleTime;
     double outMin, outMax;
     bool inAuto, pOnE;
+    
+    // Новий коефіцієнт масштабування: розраховується як (outMax - outMin)/255
+    double scalingFactor;
 
     // Змінні для збереження складових PID
     double P_term, I_term, D_term;
     
-    // Нові змінні для рекурсивної (різницевої) форми
+    // Змінні для рекурсивного обчислення (різницевої форми)
     double lastError;   // E(n-1)
     double prevError;   // E(n-2)
     double lastOutput;  // U(n-1)
